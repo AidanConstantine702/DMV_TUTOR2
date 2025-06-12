@@ -7,6 +7,8 @@ import datetime
 import re
 import os
 
+st.set_page_config(page_title="SC DMV AI Tutor", layout="centered")
+
 print("=== ENV DEBUG ===")
 print("SUPABASE_URL:", repr(os.environ.get("SUPABASE_URL")))
 print("SUPABASE_ANON_KEY:", repr(os.environ.get("SUPABASE_ANON_KEY")))
@@ -144,7 +146,7 @@ def create_pdf(text):
 
 # ----------------------- UI + App Features ------------------------
 
-st.set_page_config(page_title="SC DMV AI Tutor", layout="centered")
+
 st.title("SC DMV Permit Test Tutor")
 
 nav_items = [
