@@ -4,9 +4,9 @@ from io import BytesIO
 from reportlab.pdfgen import canvas
 import datetime
 import re
+import os
 
-# === OpenAI API Key (put your key in Streamlit secrets or hardcode here) ===
-api_key = st.secrets.get("openai_api_key", "")  # or just: api_key = "sk-..."
+api_key = os.environ.get("OPENAI_API_KEY", "")
 
 client = OpenAI(api_key=api_key)
 
