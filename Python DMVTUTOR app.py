@@ -2,9 +2,54 @@ import streamlit as st
 from openai import OpenAI
 from io import BytesIO
 from reportlab.pdfgen import canvas
+from supabase import create_client, Client
 import datetime
 import re
 import os
+
+# Load Supabase credentials (use Render environment variables)
+supabase_url = os.environ.get("SUPABASE_URL")
+supabase_key = os.environ.get("SUPABASE_ANON_KEY")
+
+supabase: Client = create_client(supabase_url, supabase_key)
+
+def is_paid_user(email):
+    data = supabase.table("paid_users").select("email").eq("email", email).execute()
+    return len(data.data) > 0
+
+st.title("DMV Tutor Login")
+
+if "user" not in st.session_state:
+    choice = st.radio("Login or Sign Up?", ["Login", "Sign Up"])
+    email = st.text_input("Email")
+    password = st.text_input("Password", type="password")
+    if choice == "Sign Up":
+        if st.button("Sign Up"):
+            res = supabase.auth.sign_up({"email": email, "password": password})
+            if res.user:
+                st.success("Check your email to confirm sign up!")
+            else:
+                st.error("Sign up failed.")
+    else:
+        if st.button("Login"):
+            res = supabase.auth.sign_in_with_password({"email": email, "password": password})
+            if res.user:
+                # Check paid_users table
+                if is_paid_user(email):
+                    st.session_state["user"] = email
+                    st.success("Login successful! Welcome to DMV Tutor.")
+                    st.experimental_rerun()
+                else:
+                    st.error("You must purchase access to DMV Tutor on our main website.")
+            else:
+                st.error("Login failed.")
+
+else:
+    st.write(f"Welcome, {st.session_state['user']}!")
+    # ...rest of your app goes here (quizzes, flashcards, etc.)
+    if st.button("Logout"):
+        del st.session_state["user"]
+        st.experimental_rerun()
 
 api_key = os.environ.get("OPENAI_API_KEY", "")
 
