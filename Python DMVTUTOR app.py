@@ -15,8 +15,8 @@ print("ALL ENV:", list(os.environ.keys()))
 print("=================")
 
 # Load Supabase credentials (use Render environment variables)
-supabase_url = os.environ.get("SUPABASE_URL")
-supabase_key = os.environ.get("SUPABASE_ANON_KEY")
+supabase_url = "https://yzoilltyddrgadifkrfc.supabase.co"
+supabase_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6b2lsbHR5ZGRyZ2FkaWZrcmZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk3NDYyNTMsImV4cCI6MjA2NTMyMjI1M30.hJyZVSntophtXZIU2rBXHPKQkW14X5gQeE8Kz5xtaHs"
 
 supabase: Client = create_client(supabase_url, supabase_key)
 
