@@ -144,6 +144,13 @@ def create_pdf(text):
     buffer.seek(0)
     return buffer
 
+else:
+    st.write(f"Welcome, {st.session_state['user']}!")
+    # ...rest of your app goes here (quizzes, flashcards, etc.)
+    if st.button("Logout"):
+        del st.session_state["user"]
+        st.experimental_rerun()
+
 # ----------------------- UI + App Features ------------------------
 
 
