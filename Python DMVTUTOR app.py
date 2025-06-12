@@ -7,6 +7,13 @@ import datetime
 import re
 import os
 
+print("=== ENV DEBUG ===")
+print("SUPABASE_URL:", repr(os.environ.get("SUPABASE_URL")))
+print("SUPABASE_ANON_KEY:", repr(os.environ.get("SUPABASE_ANON_KEY")))
+print("OPENAI_API_KEY:", repr(os.environ.get("OPENAI_API_KEY")))
+print("ALL ENV:", list(os.environ.keys()))
+print("=================")
+
 # Load Supabase credentials (use Render environment variables)
 supabase_url = os.environ.get("SUPABASE_URL")
 supabase_key = os.environ.get("SUPABASE_ANON_KEY")
