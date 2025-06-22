@@ -1,62 +1,45 @@
 import streamlit as st
 from openai import OpenAI
+from supabase import create_client, Client
 from io import BytesIO
 from reportlab.pdfgen import canvas
-from supabase import create_client, Client
-import datetime
-import re
-import os
+import datetime, os, re
 
+# --- Page config MUST be first Streamlit call ---
 st.set_page_config(page_title="SC DMV AI Tutor", layout="centered")
 
-print("=== ENV DEBUG ===")
-print("SUPABASE_URL:", repr(os.environ.get("SUPABASE_URL")))
-print("SUPABASE_ANON_KEY:", repr(os.environ.get("SUPABASE_ANON_KEY")))
-print("OPENAI_API_KEY:", repr(os.environ.get("OPENAI_API_KEY")))
-print("ALL ENV:", list(os.environ.keys()))
-print("=================")
-
-# Load Supabase credentials (use Render environment variables)
-supabase_url = "https://yzoilltyddrgadifkrfc.supabase.co"
-supabase_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6b2lsbHR5ZGRyZ2FkaWZrcmZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk3NDYyNTMsImV4cCI6MjA2NTMyMjI1M30.hJyZVSntophtXZIU2rBXHPKQkW14X5gQeE8Kz5xtaHs"
-
+# --- Supabase setup (use ENV vars again!) ---
+supabase_url  = os.environ.get("SUPABASE_URL")
+supabase_key  = os.environ.get("SUPABASE_ANON_KEY")
 supabase: Client = create_client(supabase_url, supabase_key)
 
 def is_paid_user(email):
     data = supabase.table("paid_users").select("email").eq("email", email).execute()
     return len(data.data) > 0
 
+# ----------  LOGIN / SIGN-UP UI  ----------
 st.title("DMV Tutor Login")
-
 if "user" not in st.session_state:
-    choice = st.radio("Login or Sign Up?", ["Login", "Sign Up"])
-    email = st.text_input("Email")
+    choice   = st.radio("Login or Sign Up?", ["Login", "Sign Up"])
+    email    = st.text_input("Email")
     password = st.text_input("Password", type="password")
+
     if choice == "Sign Up":
         if st.button("Sign Up"):
             res = supabase.auth.sign_up({"email": email, "password": password})
-            if res.user:
-                st.success("Check your email to confirm sign up!")
-            else:
-                st.error("Sign up failed.")
-    else:
+            st.success("Check your email to confirm sign-up!" if res.user else "Sign-up failed.")
+    else:  # Login
         if st.button("Login"):
             res = supabase.auth.sign_in_with_password({"email": email, "password": password})
-            if res.user:
-                # Check paid_users table
-                if is_paid_user(email):
-                    st.session_state["user"] = email
-                    st.success("Login successful! Welcome to DMV Tutor.")
-                    st.experimental_rerun()
-                else:
-                    st.error("You must purchase access to DMV Tutor on our main website.")
+            if res.user and is_paid_user(email):
+                st.session_state["user"] = email
+                st.experimental_rerun()
             else:
-                st.error("Login failed.")
-
+                st.error("Login failed or you haven’t purchased access.")
+# ----------  MAIN APP (only after login)  ----------
 else:
-    st.write(f"Welcome, {st.session_state['user']}!")
-    # ...rest of your app goes here (quizzes, flashcards, etc.)
-    if st.button("Logout"):
+    st.sidebar.title("Navigation")
+    if st.button("Logout"):          # quick logout button
         del st.session_state["user"]
         st.experimental_rerun()
 
@@ -419,3 +402,18 @@ elif menu == "Progress Tracker":
             st.metric("Total Accuracy", f"{accuracy:.1f}%")
     else:
         st.info("No progress saved yet.")
+
+menu = st.sidebar.radio("Go to page:", nav_items)
+
+    if menu == "Tutor Chat":
+        st.header("Chat with Your DMV Tutor")
+        # ... your Tutor-Chat code ...
+    elif menu == "Practice Quiz":
+        # ... your Quiz code ...
+    elif menu == "Flashcards":
+        # ... your Flashcard code ...
+    elif menu == "Study Plan":
+        # ... your Study-Plan code ...
+    elif menu == "Progress Tracker":
+        # ... your Progress-Tracker code ...
+    # ===== END OF MAIN APP =====
