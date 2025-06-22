@@ -1,27 +1,15 @@
-"""SC DMV Tutor – no‑login version
-Paste Part 1, Part 2, then Part 3 into a single `app.py`.
-"""
-
 import streamlit as st
 from openai import OpenAI
 from io import BytesIO
 from reportlab.pdfgen import canvas
-import datetime, os, re
+import datetime
+import re
 
-# ------------------------------------------------------------
-# PAGE CONFIG (must be first Streamlit call)
-# ------------------------------------------------------------
-st.set_page_config(page_title="SC DMV AI Tutor", layout="centered")
+# === OpenAI API Key (put your key in Streamlit secrets or hardcode here) ===
+api_key = st.secrets.get("openai_api_key", "")  # or just: api_key = "sk-..."
 
-# ------------------------------------------------------------
-# OPENAI client (env var)
-# ------------------------------------------------------------
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
-client = OpenAI(api_key=OPENAI_API_KEY)
+client = OpenAI(api_key=api_key)
 
-# ------------------------------------------------------------
-# SYSTEM PROMPT & helpers (unchanged)
-# ------------------------------------------------------------
 SYSTEM_PROMPT = (
     "You are a certified South Carolina DMV Permit Test Tutor specializing in helping teenagers "
     "prepare for their written learner’s permit exam.\n\n"
@@ -34,14 +22,21 @@ SYSTEM_PROMPT = (
     "- DO NOT make up laws, facts, or explanations.\n"
     "- Use language appropriate for 15- to 17-year-olds.\n"
     "- When creating a quiz, strictly follow this format:\n"
-    "Question 1: [question text]\nA. [option A]\nB. [option B]\nC. [option C]\nD. [option D]\nAnswer: [A/B/C/D]\n\n"
-    "- When creating flashcards, strictly follow this format:\nQ: [question]\nA: [answer]\n"
+    "Question 1: [question text]\n"
+    "A. [option A]\n"
+    "B. [option B]\n"
+    "C. [option C]\n"
+    "D. [option D]\n"
+    "Answer: [A/B/C/D]\n\n"
+    "- When creating flashcards, strictly follow this format:\n"
+    "Q: [question]\nA: [answer]\n"
     "- Return exactly 10 Q/A flashcards and nothing else. No numbering, no MCQ, no explanations, no commentary.\n"
     "- Start each question with 'Question [number]:'.\n"
     "- Return EXACTLY N questions in the specified format.\n"
     "- DO NOT include explanations, hints, or any extra text.\n"
     "- Make sure all questions are unique and properly numbered.\n\n"
-    "**Failure to follow these instructions will result in broken output.**\n\n"
+    "**Failure to follow these instructions will result in broken output.**"
+        "\n\n"
     "Proactive guidance:\n"
     "- After answering the user's question, briefly suggest ONE effective test‑taking or study strategy (e.g. spaced repetition, practice under timed conditions).\n"
     "- Then, recommend a relevant feature of this website (Practice Quiz, Flashcards, Study Plan, or Progress Tracker) and explain in one sentence how using it will help them master the permit test faster.\n"
@@ -58,52 +53,46 @@ def query_gpt(messages):
 def parse_quiz(raw_text):
     pattern = re.compile(
         r"Question\s+\d+:\s*(.*?)\nA\.\s*(.*?)\nB\.\s*(.*?)\nC\.\s*(.*?)\nD\.\s*(.*?)\nAnswer:\s*([A-D])",
-        re.DOTALL,
+        re.DOTALL
     )
     matches = pattern.findall(raw_text)
     questions = []
     for match in matches:
-        q, a, b, c, d, ans = match
+        question, a, b, c, d, answer = match
         questions.append({
-            "question": q.strip(),
-            "options": {"A": a.strip(), "B": b.strip(), "C": c.strip(), "D": d.strip()},
-            "answer": ans.strip(),
+            "question": question.strip(),
+            "options": {
+                "A": a.strip(),
+                "B": b.strip(),
+                "C": c.strip(),
+                "D": d.strip()
+            },
+            "answer": answer.strip()
         })
     return questions
 
 def parse_flashcards(raw_text):
     pattern = re.compile(r"Q:\s*(.*?)\nA:\s*(.*?)(?=\nQ:|\Z)", re.DOTALL)
-    return [{"question": q.strip(), "answer": a.strip()} for q, a in pattern.findall(raw_text)]
+    cards = pattern.findall(raw_text)
+    return [{"question": q.strip(), "answer": a.strip()} for q, a in cards]
 
-def create_pdf(text: str):
-    buf = BytesIO()
-    pdf = canvas.Canvas(buf)
+def create_pdf(text):
+    buffer = BytesIO()
+    pdf = canvas.Canvas(buffer)
     y = 800
     for line in text.split("\n"):
         if y < 40:
-            pdf.showPage(); y = 800
+            pdf.showPage()
+            y = 800
         pdf.drawString(40, y, line)
         y -= 15
-    pdf.save(); buf.seek(0)
-    return buf
+    pdf.save()
+    buffer.seek(0)
+    return buffer
 
-# ------------------------------------------------------------
-# UI HEADER + SIDEBAR NAV  (no login gate)
-# ------------------------------------------------------------
-st.title("SC DMV Permit Test Tutor")
+# ----------------------- UI + App Features ------------------------
 
-nav_items = [
-    "Tutor Chat",
-    "Practice Quiz",
-    "Flashcards",
-    "Study Plan",
-    "Progress Tracker",
-]
-menu = st.sidebar.radio("Navigation", nav_items)
-# ------------------------------------------------------------
-# MAIN APP UI (continued)
-# ------------------------------------------------------------
-
+st.set_page_config(page_title="SC DMV AI Tutor", layout="centered")
 st.title("SC DMV Permit Test Tutor")
 
 nav_items = [
@@ -119,23 +108,21 @@ menu = st.sidebar.radio("Navigation", nav_items)
 if menu == "Tutor Chat":
     st.header("Chat with Your DMV Tutor")
     if "chat_history" not in st.session_state:
-        st.session_state["chat_history"] = [
+        st.session_state.chat_history = [
             {"role": "system", "content": SYSTEM_PROMPT}
         ]
-    for msg in st.session_state["chat_history"][1:]:
+    for msg in st.session_state.chat_history[1:]:
         st.chat_message(msg["role"]).write(msg["content"])
-
-    user_input = st.chat_input("Ask a question about the permit test…")
+    user_input = st.chat_input("Ask a question about the permit test...")
     if user_input:
-        st.session_state["chat_history"].append({"role": "user", "content": user_input})
-        with st.spinner("Thinking…"):
-            response = query_gpt(st.session_state["chat_history"])
-        st.session_state["chat_history"].append({"role": "assistant", "content": response})
+        st.session_state.chat_history.append({"role": "user", "content": user_input})
+        with st.spinner("Thinking..."):
+            response = query_gpt(st.session_state.chat_history)
+        st.session_state.chat_history.append({"role": "assistant", "content": response})
         st.chat_message("user").write(user_input)
         st.chat_message("assistant").write(response)
-
     if st.button("Clear Chat"):
-        st.session_state["chat_history"] = [
+        st.session_state.chat_history = [
             {"role": "system", "content": SYSTEM_PROMPT}
         ]
         st.rerun()
@@ -148,7 +135,7 @@ elif menu == "Practice Quiz":
     num = st.slider("Number of Questions", 5, 10, 5)
     topic = st.selectbox(
         "Quiz Topic",
-        ["General", "Road Signs", "Right of Way", "Alcohol Laws", "Speed Limits", "Traffic Signals"],
+        ["General", "Road Signs", "Right of Way", "Alcohol Laws", "Speed Limits", "Traffic Signals"]
     )
 
     if st.button("Generate Quiz"):
@@ -164,10 +151,10 @@ elif menu == "Practice Quiz":
             "Return ONLY the questions — no explanations, no commentary, no extra text. "
             "Number all questions correctly and provide the correct answer for each."
         )
-        with st.spinner("Creating your quiz…"):
+        with st.spinner("Creating your quiz..."):
             raw_quiz = query_gpt([
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
+                {"role": "user", "content": prompt}
             ])
             st.session_state["quiz_data"] = parse_quiz(raw_quiz)
             st.session_state["quiz_answers"] = {}
@@ -180,10 +167,10 @@ elif menu == "Practice Quiz":
 
         for idx, q in enumerate(quiz_data):
             label = f"{idx + 1}. {q['question']}"
-            options = ["Select an answer…"] + [f"{key}. {val}" for key, val in q["options"].items()]
+            options = ["Select an answer..."] + [f"{key}. {val}" for key, val in q["options"].items()]
             selected = st.radio(label, options, key=f"q_{idx}", index=0)
 
-            if selected != "Select an answer…":
+            if selected != "Select an answer...":
                 st.session_state["quiz_answers"][idx] = selected[0]
             else:
                 st.session_state["quiz_answers"][idx] = None
@@ -195,17 +182,179 @@ elif menu == "Practice Quiz":
                 1 for idx, q in enumerate(quiz_data)
                 if st.session_state["quiz_answers"].get(idx) == q["answer"]
             )
+            # Save to session for Progress Tracker
+            if "quiz_scores" not in st.session_state:
+                st.session_state["quiz_scores"] = []
+            st.session_state["quiz_scores"].append({
+                "date": str(datetime.date.today()),
+                "topic": topic,
+                "correct": correct,
+                "attempted": len(quiz_data)
+            })
             st.success(f"You got {correct} out of {len(quiz_data)} correct!")
             st.markdown("**Correct Answers:**")
             for i, q in enumerate(quiz_data):
-                st.markdown(f"- Question {i + 1}: {q['answer']}")
-    elif menu == "Flashcards":
-        st.header("Flashcards")
-        topic = st.selectbox(
-            "Flashcard Topic",
-            ["General", "Road Signs", "Right of Way", "Alcohol Laws", "Speed Limits", "Traffic Signals"]
+                st.markdown(f"- Question {i+1}: {q['answer']}")
+
+# === Flashcards ===
+elif menu == "Flashcards":
+    st.header("Flashcards")
+    topic = st.selectbox(
+        "Flashcard Topic",
+        ["General", "Road Signs", "Right of Way", "Alcohol Laws", "Speed Limits", "Traffic Signals"]
+    )
+
+    if st.button("Generate Flashcards"):
+        prompt = (
+            f"Generate 10 flashcards for the topic '{topic}' using a Q&A format only from the SC permit test. "
+            "Each flashcard should have a clear question and a short, clear answer. "
+            "Use exactly this format for each flashcard: Q: [question]\nA: [answer]\n"
+            "Return ONLY flashcards, no extra text, no multiple choice, and no explanations."
+        )
+        with st.spinner("Creating flashcards..."):
+            raw_flashcards = query_gpt([
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt}
+            ])
+            flashcards_data = parse_flashcards(raw_flashcards)
+            st.session_state["flashcards_data"] = flashcards_data
+            st.session_state["flashcard_revealed"] = [False] * len(flashcards_data)
+
+    if "flashcards_data" in st.session_state:
+        st.subheader(f"{topic} Flashcards")
+
+        for idx, card in enumerate(st.session_state["flashcards_data"]):
+            st.markdown(f"**Q{idx+1}: {card['question']}**")
+            if not st.session_state["flashcard_revealed"][idx]:
+                if st.button("Reveal Answer", key=f"reveal_btn_{idx}"):
+                    st.session_state["flashcard_revealed"][idx] = True
+
+            if st.session_state["flashcard_revealed"][idx]:
+                st.success(f"**A{idx+1}: {card['answer']}**")
+            st.write("---")
+
+        # Download option
+        flashcard_text = "\n\n".join(
+            [f"Q{idx+1}: {c['question']}\nA{idx+1}: {c['answer']}"
+             for idx, c in enumerate(st.session_state["flashcards_data"])]
+        )
+        st.download_button(
+            "Download PDF", create_pdf(flashcard_text), file_name="flashcards.pdf"
         )
 
-        if st.button("Generate Flashcards"):
-            prompt = (
-                f"Generate 10 flashcards for the topic '{topic}' using a Q&A format only from the SC pe...
+# === Study Plan ===
+elif menu == "Study Plan":
+    st.header("3-Day Study Plan")
+    plan = """
+## 🚦 3‑Day “Permit‑Ready” Study Plan  
+_All you need is right here on your DMV Tutor site_
+
+---
+
+### DAY 1 – MASTER THE BASICS
+
+• **10 min – Game Plan Kick‑Off**  
+  ○ Skim this schedule and set a mini‑goal for today.  
+  ○ Tool: 3‑Day Plan page  
+
+• **20 min – Chat with the AI Tutor**  
+  ○ Ask: “What mistakes do first‑time drivers make most?”  
+  ○ Get quick, teen‑friendly explanations.  
+
+• **25 min – General Quiz Attack**  
+  ○ Go to _Practice Quiz → General_.  
+  ○ Discover what you already know (or don’t).  
+
+• **15 min – Traffic Signals Flashcards**  
+  ○ Flashcards → Traffic Signals to lock in light colors & arrow shapes.  
+
+• **5 min – Progress Check‑In**  
+  ○ Enter today’s quiz score in _Progress Tracker_.  
+  ○ Jot one topic that felt tough—AI Tutor will focus on it tomorrow.  
+
+---
+
+### DAY 2 – DIAL IN THE DETAILS
+
+• **10 min – Road Signs Warm‑Up**  
+  ○ Flashcards → Road Signs (speedy picture‑memory boost).  
+
+• **20 min – Rapid‑Fire Q&A**  
+  ○ AI Tutor: “Give me 5 tips to remember right‑of‑way rules.”  
+
+• **25 min – Right‑of‑Way Quiz**  
+  ○ Practice Quiz → Right of Way.  
+  ○ Put those fresh tips to the test.  
+
+• **15 min – Speed Limits Flashcards**  
+  ○ Flashcards → Speed Limits to nail the numbers.  
+
+• **10 min – Progress Tracker Update**  
+  ○ Mark new scores, celebrate streaks, spot weak points.  
+
+• **Evening Mini‑Challenge (Optional 10 min)**  
+  ○ Re‑take yesterday’s General Quiz and beat your score.  
+
+---
+
+### DAY 3 – GAME‑DAY SIMULATION
+
+• **15 min – Flashcard Fix‑Up**  
+  ○ Hit any topic where you’re under 80 %. Lightning review.  
+
+• **35 min – Full‑Length Mock Quiz**  
+  ○ Practice Quiz → General. Do it twice back‑to‑back for real‑test stamina.  
+
+• **15 min – Last‑Minute AI Tutor Grill‑Session**  
+  ○ Ask: “Quiz me on 10 tricky alcohol‑law questions.”  
+  ○ Get instant correction & tips.  
+
+• **5 min – Final Progress High‑Five**  
+  ○ Open _Progress Tracker_, admire the glow‑up, and breathe. You’re ready!  
+
+---
+
+### PRO TIPS
+
+• **Chunk it → Check it:** tick off each block in Progress Tracker for a mini dopamine hit.  
+• **Speak answers out loud:** saying flashcard answers cements memory.  
+• **Move & hydrate:** quick stretch or sip of water between blocks keeps your brain sharp.  
+• **Use “Explain like I’m 14”:** anytime you’re lost, type this to the AI Tutor for a simpler breakdown.  
+
+Stick to the plan, trust the tools, and you’ll cruise through the SC permit test. **You got this!** 🚗💨
+"""
+    st.markdown(plan)
+    st.download_button("Download PDF", create_pdf(plan), file_name="study_plan.pdf")
+
+# === Progress Tracker ===
+elif menu == "Progress Tracker":
+    st.header("Your Progress")
+    scores = st.session_state.get("quiz_scores", [])
+    if scores:
+        # Group attempts by date for daily accuracy
+        from collections import defaultdict
+        date_stats = defaultdict(lambda: {"correct": 0, "attempted": 0, "topics": []})
+        for entry in scores:
+            d = entry["date"]
+            date_stats[d]["correct"] += entry["correct"]
+            date_stats[d]["attempted"] += entry["attempted"]
+            date_stats[d]["topics"].append(f'{entry["topic"]} — {entry["correct"]}/{entry["attempted"]} correct')
+        for d in sorted(date_stats.keys(), reverse=True):
+            topics_str = "<br>".join(date_stats[d]["topics"])
+            accuracy = (
+                (date_stats[d]["correct"] / date_stats[d]["attempted"]) * 100
+                if date_stats[d]["attempted"] else 0
+            )
+            st.markdown(
+                f"**{d}**<br>{topics_str}<br>"
+                f"<span style='color: #666;'>Daily Accuracy: <b>{accuracy:.1f}%</b></span><br><br>",
+                unsafe_allow_html=True,
+            )
+        # Compute total accuracy
+        total_correct = sum(x["correct"] for x in scores)
+        total_attempted = sum(x["attempted"] for x in scores)
+        if total_attempted:
+            accuracy = (total_correct / total_attempted) * 100
+            st.metric("Total Accuracy", f"{accuracy:.1f}%")
+    else:
+        st.info("No progress saved yet.")
