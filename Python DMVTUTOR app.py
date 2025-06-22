@@ -127,13 +127,6 @@ def create_pdf(text):
     buffer.seek(0)
     return buffer
 
-else:
-    st.write(f"Welcome, {st.session_state['user']}!")
-    # ...rest of your app goes here (quizzes, flashcards, etc.)
-    if st.button("Logout"):
-        del st.session_state["user"]
-        st.experimental_rerun()
-
 # ----------------------- UI + App Features ------------------------
 
 
@@ -403,9 +396,7 @@ elif menu == "Progress Tracker":
     else:
         st.info("No progress saved yet.")
 
-menu = st.sidebar.radio("Go to page:", nav_items)
 
-    if menu == "Tutor Chat":
         st.header("Chat with Your DMV Tutor")
         # ... your Tutor-Chat code ...
     elif menu == "Practice Quiz":
