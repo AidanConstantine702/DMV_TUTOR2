@@ -6,6 +6,12 @@ import datetime
 import re
 import os
 
+st.set_page_config(page_title="SC DMV AI Tutor", layout="centered")
+
+SUPABASE_URL  = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY  = os.environ.get("SUPABASE_ANON_KEY")
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
 # === OpenAI API Key (put your key in Streamlit secrets or hardcode here) ===
 api_key = os.environ.get("OPENAI_API_KEY", "")
 
