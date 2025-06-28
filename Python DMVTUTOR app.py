@@ -368,32 +368,40 @@ Stick to the plan, trust the tools, and you’ll cruise through the SC permit te
 # === Progress Tracker ===
 elif menu == "Progress Tracker":
     st.header("Your Progress")
-    scores = st.session_state.get("quiz_scores", [])
-    if scores:
-        # Group attempts by date for daily accuracy
+
+    # pull rows for the logged-in user
+    resp = supabase.table("progress").select("*").eq(
+        "email", st.session_state["user"]
+    ).execute()
+    rows = resp.data or []
+
+    if not rows:
+        st.info("No progress saved yet.")
+    else:
+        # aggregate by day
         from collections import defaultdict
-        date_stats = defaultdict(lambda: {"correct": 0, "attempted": 0, "topics": []})
-        for entry in scores:
-            d = entry["date"]
-            date_stats[d]["correct"] += entry["correct"]
-            date_stats[d]["attempted"] += entry["attempted"]
-            date_stats[d]["topics"].append(f'{entry["topic"]} — {entry["correct"]}/{entry["attempted"]} correct')
-        for d in sorted(date_stats.keys(), reverse=True):
-            topics_str = "<br>".join(date_stats[d]["topics"])
-            accuracy = (
-                (date_stats[d]["correct"] / date_stats[d]["attempted"]) * 100
-                if date_stats[d]["attempted"] else 0
+        day = defaultdict(lambda: {"c": 0, "a": 0, "topics": []})
+
+        for r in rows:
+            d = r["date"]
+            day[d]["c"] += r["correct"]
+            day[d]["a"] += r["attempted"]
+            day[d]["topics"].append(
+                f"{r['topic']} — {r['correct']}/{r['attempted']} correct"
             )
+
+        for d in sorted(day, reverse=True):
+            acc = (day[d]["c"] / day[d]["a"]) * 100 if day[d]["a"] else 0
+            topics_str = "<br>".join(day[d]["topics"])
             st.markdown(
                 f"**{d}**<br>{topics_str}<br>"
-                f"<span style='color: #666;'>Daily Accuracy: <b>{accuracy:.1f}%</b></span><br><br>",
+                f"<span style='color:#666;'>Daily Accuracy: <b>{acc:.1f}%</b></span><br><br>",
                 unsafe_allow_html=True,
             )
-        # Compute total accuracy
-        total_correct = sum(x["correct"] for x in scores)
-        total_attempted = sum(x["attempted"] for x in scores)
-        if total_attempted:
-            accuracy = (total_correct / total_attempted) * 100
-            st.metric("Total Accuracy", f"{accuracy:.1f}%")
+
+        total_c = sum(r["correct"] for r in rows)
+        total_a = sum(r["attempted"] for r in rows)
+        if total_a:
+            st.metric("Total Accuracy", f"{(total_c / total_a) * 100:.1f}%")
     else:
         st.info("No progress saved yet.")
