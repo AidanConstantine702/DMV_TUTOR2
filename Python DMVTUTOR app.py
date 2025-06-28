@@ -97,6 +97,35 @@ def create_pdf(text):
     buffer.seek(0)
     return buffer
 
+st.title("DMV Tutor Login")
+
+if "user" not in st.session_state:
+    mode      = st.radio("Login or Sign Up", ["Login", "Sign Up"])
+    email     = st.text_input("Email")
+    password  = st.text_input("Password", type="password")
+
+    if st.button(mode):
+        if mode == "Sign Up":
+            ok = supabase.auth.sign_up({"email": email, "password": password}).user
+            st.success("Check your inbox to confirm.") if ok else st.error("Sign-up failed")
+        else:
+            ok = supabase.auth.sign_in_with_password({"email": email, "password": password}).user
+            if ok:
+                st.session_state["user"] = email
+                st.experimental_rerun()
+            else:
+                st.error("Login failed")
+    st.stop()          # guests see nothing else
+# ---------- logged-in code below ----------
+
+st.sidebar.write(f"Logged in as {st.session_state['user']}")
+if st.sidebar.button("Logout"):
+    del st.session_state["user"]; st.experimental_rerun()
+
+st.title("SC DMV Permit Test Tutor")
+nav_items = ["Tutor Chat","Practice Quiz","Flashcards","Study Plan","Progress Tracker"]
+menu = st.sidebar.radio("Navigation", nav_items)
+
 # ----------------------- UI + App Features ------------------------
 
 st.set_page_config(page_title="SC DMV AI Tutor", layout="centered")
