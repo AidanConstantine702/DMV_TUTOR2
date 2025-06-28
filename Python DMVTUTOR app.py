@@ -167,73 +167,27 @@ if menu == "Tutor Chat":
 # === Practice Quiz ===
 elif menu == "Practice Quiz":
     st.header("Practice Quiz")
-    st.info("For each question, select your answer. No answer is selected by default. You must answer every question to submit the quiz.")
+    st.info(
+        "For each question, select your answer. "
+        "No answer is selected by default. You must answer every question to submit the quiz."
+    )
 
     num = st.slider("Number of Questions", 5, 10, 5)
     topic = st.selectbox(
         "Quiz Topic",
-        ["General", "Road Signs", "Right of Way", "Alcohol Laws", "Speed Limits", "Traffic Signals"]
+        [
+            "General",
+            "Road Signs",
+            "Right of Way",
+            "Alcohol Laws",
+            "Speed Limits",
+            "Traffic Signals",
+        ],
     )
 
     if st.button("Generate Quiz"):
         prompt = (
-            f"Generate exactly {num} multiple-choice questions for the topic '{topic}' from the South Carolina DMV permit test. "
-            "Each must follow this format:\n"
-            "Question 1: [question]\n"
-            "A. [option A]\n"
-            "B. [option B]\n"
-            "C. [option C]\n"
-            "D. [option D]\n"
-            "Answer: [correct option letter]\n\n"
-            "Return ONLY the questions — no explanations, no commentary, no extra text. "
-            "Number all questions correctly and provide the correct answer for each."
-        )
-        with st.spinner("Creating your quiz..."):
-            raw_quiz = query_gpt([
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt}
-            ])
-            st.session_state["quiz_data"] = parse_quiz(raw_quiz)
-            st.session_state["quiz_answers"] = {}
-            st.session_state["quiz_submitted"] = False
-
-    if "quiz_data" in st.session_state:
-        st.subheader("Take the Quiz")
-        quiz_data = st.session_state["quiz_data"]
-        all_answered = True
-
-        for idx, q in enumerate(quiz_data):
-            label = f"{idx + 1}. {q['question']}"
-            options = ["Select an answer..."] + [f"{key}. {val}" for key, val in q["options"].items()]
-            selected = st.radio(label, options, key=f"q_{idx}", index=0)
-
-            if selected != "Select an answer...":
-                st.session_state["quiz_answers"][idx] = selected[0]
-            else:
-                st.session_state["quiz_answers"][idx] = None
-                all_answered = False
-
-               if st.button("Submit Quiz", disabled=not all_answered):
-            st.session_state["quiz_submitted"] = True
-            correct = sum(
-                1 for idx, q in enumerate(quiz_data)
-                if st.session_state["quiz_answers"].get(idx) == q["answer"]
-            )
-
-            # NEW: write result to Supabase
-            supabase.table("progress").insert({
-                "email":     st.session_state["user"],
-                "date":      datetime.date.today().isoformat(),
-                "topic":     topic,
-                "correct":   correct,
-                "attempted": len(quiz_data)
-            }).execute()
-
-            # (keep your existing session-state code if you still want local history)
-            st.success(f"You got {correct} out of {len(quiz_data)} correct!")
-            st.markdown("**Correct Answers:**")
-            for i, q in enumerate(quiz_data):
-                st.markdown(f"- Question {i+1}: {q['answer']}")
+            f"Generate exactly {num} multiple-choice q
 
 # === Flashcards ===
 elif menu == "Flashcards":
