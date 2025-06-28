@@ -5,6 +5,7 @@ from reportlab.pdfgen import canvas
 import datetime
 import re
 import os
+from supabase import create_client, Client
 
 st.set_page_config(page_title="SC DMV AI Tutor", layout="centered")
 
