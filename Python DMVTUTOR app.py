@@ -213,21 +213,23 @@ elif menu == "Practice Quiz":
                 st.session_state["quiz_answers"][idx] = None
                 all_answered = False
 
-        if st.button("Submit Quiz", disabled=not all_answered):
+               if st.button("Submit Quiz", disabled=not all_answered):
             st.session_state["quiz_submitted"] = True
             correct = sum(
                 1 for idx, q in enumerate(quiz_data)
                 if st.session_state["quiz_answers"].get(idx) == q["answer"]
             )
-            # Save to session for Progress Tracker
-            if "quiz_scores" not in st.session_state:
-                st.session_state["quiz_scores"] = []
-            st.session_state["quiz_scores"].append({
-                "date": str(datetime.date.today()),
-                "topic": topic,
-                "correct": correct,
+
+            # NEW: write result to Supabase
+            supabase.table("progress").insert({
+                "email":     st.session_state["user"],
+                "date":      datetime.date.today().isoformat(),
+                "topic":     topic,
+                "correct":   correct,
                 "attempted": len(quiz_data)
-            })
+            }).execute()
+
+            # (keep your existing session-state code if you still want local history)
             st.success(f"You got {correct} out of {len(quiz_data)} correct!")
             st.markdown("**Correct Answers:**")
             for i, q in enumerate(quiz_data):
