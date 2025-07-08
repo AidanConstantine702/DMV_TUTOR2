@@ -1,19 +1,55 @@
-import streamlit as st
 from openai import OpenAI
 from io import BytesIO
 from reportlab.pdfgen import canvas
+from supabase import create_client, Client
 import datetime
 import re
 import os
-from supabase import create_client, Client
 
-st.set_page_config(page_title="SC DMV AI Tutor", layout="centered")
+# Load Supabase credentials (use Render environment variables)
+supabase_url = os.environ.get("SUPABASE_URL")
+supabase_key = os.environ.get("SUPABASE_ANON_KEY")
 
-SUPABASE_URL  = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY  = os.environ.get("SUPABASE_ANON_KEY")
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+supabase: Client = create_client(supabase_url, supabase_key)
 
-# === OpenAI API Key (put your key in Streamlit secrets or hardcode here) ===
+def is_paid_user(email):
+    data = supabase.table("paid_users").select("email").eq("email", email).execute()
+    return len(data.data) > 0
+
+st.title("DMV Tutor Login")
+
+if "user" not in st.session_state:
+    choice = st.radio("Login or Sign Up?", ["Login", "Sign Up"])
+    email = st.text_input("Email")
+    password = st.text_input("Password", type="password")
+    if choice == "Sign Up":
+        if st.button("Sign Up"):
+            res = supabase.auth.sign_up({"email": email, "password": password})
+            if res.user:
+                st.success("Check your email to confirm sign up!")
+            else:
+                st.error("Sign up failed.")
+    else:
+        if st.button("Login"):
+            res = supabase.auth.sign_in_with_password({"email": email, "password": password})
+            if res.user:
+                # Check paid_users table
+                if is_paid_user(email):
+                    st.session_state["user"] = email
+                    st.success("Login successful! Welcome to DMV Tutor.")
+                    st.experimental_rerun()
+                else:
+                    st.error("You must purchase access to DMV Tutor on our main website.")
+            else:
+                st.error("Login failed.")
+
+else:
+    st.write(f"Welcome, {st.session_state['user']}!")
+    # ...rest of your app goes here (quizzes, flashcards, etc.)
+    if st.button("Logout"):
+        del st.session_state["user"]
+        st.experimental_rerun()
+
 api_key = os.environ.get("OPENAI_API_KEY", "")
 
 client = OpenAI(api_key=api_key)
@@ -98,35 +134,6 @@ def create_pdf(text):
     buffer.seek(0)
     return buffer
 
-st.title("DMV Tutor Login")
-
-if "user" not in st.session_state:
-    mode      = st.radio("Login or Sign Up", ["Login", "Sign Up"])
-    email     = st.text_input("Email")
-    password  = st.text_input("Password", type="password")
-
-    if st.button(mode):
-        if mode == "Sign Up":
-            ok = supabase.auth.sign_up({"email": email, "password": password}).user
-            st.success("Check your inbox to confirm.") if ok else st.error("Sign-up failed")
-        else:
-            ok = supabase.auth.sign_in_with_password({"email": email, "password": password}).user
-            if ok:
-                st.session_state["user"] = email
-                st.experimental_rerun()
-            else:
-                st.error("Login failed")
-    st.stop()          # guests see nothing else
-# ---------- logged-in code below ----------
-
-st.sidebar.write(f"Logged in as {st.session_state['user']}")
-if st.sidebar.button("Logout"):
-    del st.session_state["user"]; st.experimental_rerun()
-
-st.title("SC DMV Permit Test Tutor")
-nav_items = ["Tutor Chat","Practice Quiz","Flashcards","Study Plan","Progress Tracker"]
-menu = st.sidebar.radio("Navigation", nav_items)
-
 # ----------------------- UI + App Features ------------------------
 
 st.set_page_config(page_title="SC DMV AI Tutor", layout="centered")
@@ -167,27 +174,71 @@ if menu == "Tutor Chat":
 # === Practice Quiz ===
 elif menu == "Practice Quiz":
     st.header("Practice Quiz")
-    st.info(
-        "For each question, select your answer. "
-        "No answer is selected by default. You must answer every question to submit the quiz."
-    )
+    st.info("For each question, select your answer. No answer is selected by default. You must answer every question to submit the quiz.")
 
     num = st.slider("Number of Questions", 5, 10, 5)
     topic = st.selectbox(
         "Quiz Topic",
-        [
-            "General",
-            "Road Signs",
-            "Right of Way",
-            "Alcohol Laws",
-            "Speed Limits",
-            "Traffic Signals",
-        ],
+        ["General", "Road Signs", "Right of Way", "Alcohol Laws", "Speed Limits", "Traffic Signals"]
     )
 
     if st.button("Generate Quiz"):
         prompt = (
-            f"Generate exactly {num} multiple-choice q
+            f"Generate exactly {num} multiple-choice questions for the topic '{topic}' from the South Carolina DMV permit test. "
+            "Each must follow this format:\n"
+            "Question 1: [question]\n"
+            "A. [option A]\n"
+            "B. [option B]\n"
+            "C. [option C]\n"
+            "D. [option D]\n"
+            "Answer: [correct option letter]\n\n"
+            "Return ONLY the questions — no explanations, no commentary, no extra text. "
+            "Number all questions correctly and provide the correct answer for each."
+        )
+        with st.spinner("Creating your quiz..."):
+            raw_quiz = query_gpt([
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt}
+            ])
+            st.session_state["quiz_data"] = parse_quiz(raw_quiz)
+            st.session_state["quiz_answers"] = {}
+            st.session_state["quiz_submitted"] = False
+
+    if "quiz_data" in st.session_state:
+        st.subheader("Take the Quiz")
+        quiz_data = st.session_state["quiz_data"]
+        all_answered = True
+
+        for idx, q in enumerate(quiz_data):
+            label = f"{idx + 1}. {q['question']}"
+            options = ["Select an answer..."] + [f"{key}. {val}" for key, val in q["options"].items()]
+            selected = st.radio(label, options, key=f"q_{idx}", index=0)
+
+            if selected != "Select an answer...":
+                st.session_state["quiz_answers"][idx] = selected[0]
+            else:
+                st.session_state["quiz_answers"][idx] = None
+                all_answered = False
+
+        if st.button("Submit Quiz", disabled=not all_answered):
+            st.session_state["quiz_submitted"] = True
+            correct = sum(
+                1 for idx, q in enumerate(quiz_data)
+                if st.session_state["quiz_answers"].get(idx) == q["answer"]
+            )
+            # Save to session for Progress Tracker
+            if "quiz_scores" not in st.session_state:
+                st.session_state["quiz_scores"] = []
+            st.session_state["quiz_scores"].append({
+                "date": str(datetime.date.today()),
+                "topic": topic,
+                "correct": correct,
+                "attempted": len(quiz_data)
+            })
+            st.success(f"You got {correct} out of {len(quiz_data)} correct!")
+            st.markdown("**Correct Answers:**")
+            for i, q in enumerate(quiz_data):
+                st.markdown(f"- Question {i+1}: {q['answer']}")
 
 # === Flashcards ===
 elif menu == "Flashcards":
@@ -322,40 +373,32 @@ Stick to the plan, trust the tools, and you’ll cruise through the SC permit te
 # === Progress Tracker ===
 elif menu == "Progress Tracker":
     st.header("Your Progress")
-
-    # pull rows for the logged-in user
-    resp = supabase.table("progress").select("*").eq(
-        "email", st.session_state["user"]
-    ).execute()
-    rows = resp.data or []
-
-    if not rows:
-        st.info("No progress saved yet.")
-    else:
-        # aggregate by day
+    scores = st.session_state.get("quiz_scores", [])
+    if scores:
+        # Group attempts by date for daily accuracy
         from collections import defaultdict
-        day = defaultdict(lambda: {"c": 0, "a": 0, "topics": []})
-
-        for r in rows:
-            d = r["date"]
-            day[d]["c"] += r["correct"]
-            day[d]["a"] += r["attempted"]
-            day[d]["topics"].append(
-                f"{r['topic']} — {r['correct']}/{r['attempted']} correct"
+        date_stats = defaultdict(lambda: {"correct": 0, "attempted": 0, "topics": []})
+        for entry in scores:
+            d = entry["date"]
+            date_stats[d]["correct"] += entry["correct"]
+            date_stats[d]["attempted"] += entry["attempted"]
+            date_stats[d]["topics"].append(f'{entry["topic"]} — {entry["correct"]}/{entry["attempted"]} correct')
+        for d in sorted(date_stats.keys(), reverse=True):
+            topics_str = "<br>".join(date_stats[d]["topics"])
+            accuracy = (
+                (date_stats[d]["correct"] / date_stats[d]["attempted"]) * 100
+                if date_stats[d]["attempted"] else 0
             )
-
-        for d in sorted(day, reverse=True):
-            acc = (day[d]["c"] / day[d]["a"]) * 100 if day[d]["a"] else 0
-            topics_str = "<br>".join(day[d]["topics"])
             st.markdown(
                 f"**{d}**<br>{topics_str}<br>"
-                f"<span style='color:#666;'>Daily Accuracy: <b>{acc:.1f}%</b></span><br><br>",
+                f"<span style='color: #666;'>Daily Accuracy: <b>{accuracy:.1f}%</b></span><br><br>",
                 unsafe_allow_html=True,
             )
-
-        total_c = sum(r["correct"] for r in rows)
-        total_a = sum(r["attempted"] for r in rows)
-        if total_a:
-            st.metric("Total Accuracy", f"{(total_c / total_a) * 100:.1f}%")
+        # Compute total accuracy
+        total_correct = sum(x["correct"] for x in scores)
+        total_attempted = sum(x["attempted"] for x in scores)
+        if total_attempted:
+            accuracy = (total_correct / total_attempted) * 100
+            st.metric("Total Accuracy", f"{accuracy:.1f}%")
     else:
         st.info("No progress saved yet.")
